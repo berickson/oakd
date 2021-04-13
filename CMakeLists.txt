@@ -20,6 +20,7 @@ include_directories(
 
 catkin_install_python(PROGRAMS
   src/oakd.py
+  src/hello-world.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

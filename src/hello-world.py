@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # first, import all necessary modules
 from pathlib import Path
 import cv2
@@ -32,7 +34,7 @@ xout_nn.setStreamName("nn")
 detection_nn.out.link(xout_nn.input)
 
 # Pipeline is now finished, and we need to find an available device to run our pipeline
-device = depthai.Device(pipeline)
+device = depthai.Device(pipeline, True)
 # And start. From this point, the Device will be in "running" mode and will start sending data via XLink
 device.startPipeline()
 
@@ -85,8 +87,9 @@ while True:
             # and then draw a rectangle on the frame to show the actual result
             cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (255, 0, 0), 2)
         # After all the drawing is finished, we show the frame on the screen
-        cv2.imshow("preview", frame)
+        #cv2.imshow("preview", frame)
+        print("got an image")
 
     # at any time, you can press "q" and exit the main loop, therefore exiting the program itself
-    if cv2.waitKey(1) == ord('q'):
-        break
+    #if cv2.waitKey(1) == ord('q'):
+#        break
