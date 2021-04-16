@@ -6,6 +6,20 @@ import cv2
 import depthai
 import numpy as np
 
+# bke
+import roslib
+import rospy
+from std_msgs.msg import String
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge, CvBridgeError
+from cv_bridge.boost.cv_bridge_boost import getCvType
+bridge = CvBridge()
+# cv_image = bridge.imgmsg_to_cv2(image_message, desired_encoding='passthrough')
+
+rospy.init_node('image_converter', anonymous=True)
+image_pub = rospy.Publisher("/cameras/main",Image)
+# /bke
+
 # Pipeline tells DepthAI what operations to perform when running - you define all of the resources used and flows here
 pipeline = depthai.Pipeline()
 
@@ -17,7 +31,9 @@ cam_rgb.setInterleaved(False)
 # Next, we want a neural network that will produce the detections
 detection_nn = pipeline.createNeuralNetwork()
 # Blob is the Neural Network file, compiled for MyriadX. It contains both the definition and weights of the model
-detection_nn.setBlobPath(str((Path(__file__).parent / Path('mobilenet-ssd/mobilenet-ssd.blob')).resolve().absolute()))
+blob_path = str((Path(__file__).parent / Path('mobilenet-ssd/mobilenet-ssd.blob')).resolve().absolute())
+print(f"blob path: {blob_path}")
+detection_nn.setBlobPath(blob_path)
 # Next, we link the camera 'preview' output to the neural network detection input, so that it can produce detections
 cam_rgb.preview.link(detection_nn.input)
 
@@ -88,7 +104,9 @@ while True:
             cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (255, 0, 0), 2)
         # After all the drawing is finished, we show the frame on the screen
         #cv2.imshow("preview", frame)
-        print("got an image")
+        # image_pub.publish(bridge.cv2_to_imgmsg(frame, "bgr8"))
+        image_pub.publish(bridge.cv2_to_imgmsg(frame, "rgb8"))
+        print("published an image")
 
     # at any time, you can press "q" and exit the main loop, therefore exiting the program itself
     #if cv2.waitKey(1) == ord('q'):
