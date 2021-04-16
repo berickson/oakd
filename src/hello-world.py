@@ -14,10 +14,11 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 from cv_bridge.boost.cv_bridge_boost import getCvType
 bridge = CvBridge()
+import time
 # cv_image = bridge.imgmsg_to_cv2(image_message, desired_encoding='passthrough')
 
 rospy.init_node('image_converter', anonymous=True)
-image_pub = rospy.Publisher("/cameras/main",Image)
+image_pub = rospy.Publisher("/cameras/main",Image, queue_size = 1)
 # /bke
 
 # Pipeline tells DepthAI what operations to perform when running - you define all of the resources used and flows here
@@ -70,6 +71,7 @@ def frame_norm(frame, bbox):
 
 
 # Main host-side application loop
+last_capture_time = 0
 while True:
     # we try to fetch the data from nn/rgb queues. tryGet will return either the data packet or None if there isn't any
     in_rgb = q_rgb.tryGet()
@@ -105,8 +107,11 @@ while True:
         # After all the drawing is finished, we show the frame on the screen
         #cv2.imshow("preview", frame)
         # image_pub.publish(bridge.cv2_to_imgmsg(frame, "bgr8"))
-        image_pub.publish(bridge.cv2_to_imgmsg(frame, "rgb8"))
-        print("published an image")
+        if time.time() - last_capture_time > 0.1:
+            frame = cv2.resize(frame,(200,200))
+            image_pub.publish(bridge.cv2_to_imgmsg(frame, "bgr8"))
+            print("published an image")
+            last_capture_time = time.time()
 
     # at any time, you can press "q" and exit the main loop, therefore exiting the program itself
     #if cv2.waitKey(1) == ord('q'):
