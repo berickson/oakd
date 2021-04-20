@@ -26,6 +26,7 @@ pipeline = depthai.Pipeline()
 
 # First, we want the Color camera as the output
 cam_rgb = pipeline.createColorCamera()
+cam_rgb.setFps(15)
 cam_rgb.setPreviewSize(300, 300)  # 300x300 will be the preview frame size, available as 'preview' output of the node
 cam_rgb.setInterleaved(False)
 
@@ -77,6 +78,10 @@ while True:
     in_rgb = q_rgb.tryGet()
     in_nn = q_nn.tryGet()
 
+    if in_rgb is None and in_nn is None:
+        time.sleep(0.01)
+        continue
+
     if in_rgb is not None:
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
         shape = (3, in_rgb.getHeight(), in_rgb.getWidth())
@@ -107,8 +112,8 @@ while True:
         # After all the drawing is finished, we show the frame on the screen
         #cv2.imshow("preview", frame)
         # image_pub.publish(bridge.cv2_to_imgmsg(frame, "bgr8"))
-        if time.time() - last_capture_time > 0.1:
-            frame = cv2.resize(frame,(200,200))
+        if True or time.time() - last_capture_time > 0.2:
+            frame = cv2.resize(frame,(100,100))
             image_pub.publish(bridge.cv2_to_imgmsg(frame, "bgr8"))
             print("published an image")
             last_capture_time = time.time()
