@@ -113,7 +113,7 @@ while True:
         #cv2.imshow("preview", frame)
         # image_pub.publish(bridge.cv2_to_imgmsg(frame, "bgr8"))
         if True or time.time() - last_capture_time > 0.2:
-            frame = cv2.resize(frame,(100,100))
+            # frame = cv2.resize(frame,(200,200))
             image_pub.publish(bridge.cv2_to_imgmsg(frame, "bgr8"))
             print("published an image")
             last_capture_time = time.time()
