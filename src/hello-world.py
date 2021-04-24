@@ -30,6 +30,7 @@ cam_rgb.setFps(15)
 cam_rgb.setPreviewSize(300, 300)  # 300x300 will be the preview frame size, available as 'preview' output of the node
 cam_rgb.setInterleaved(False)
 
+
 # Next, we want a neural network that will produce the detections
 detection_nn = pipeline.createNeuralNetwork()
 # Blob is the Neural Network file, compiled for MyriadX. It contains both the definition and weights of the model
@@ -114,7 +115,9 @@ while True:
         # image_pub.publish(bridge.cv2_to_imgmsg(frame, "bgr8"))
         if True or time.time() - last_capture_time > 0.2:
             # frame = cv2.resize(frame,(200,200))
-            image_pub.publish(bridge.cv2_to_imgmsg(frame, "bgr8"))
+            imgmsg = bridge.cv2_to_imgmsg(frame, "bgr8")
+            imgmsg.header.frame_id = 'camera'
+            image_pub.publish(imgmsg)
             print("published an image")
             last_capture_time = time.time()
 
