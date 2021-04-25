@@ -121,6 +121,3 @@ while True:
             print("published an image")
             last_capture_time = time.time()
 
-    # at any time, you can press "q" and exit the main loop, therefore exiting the program itself
-    #if cv2.waitKey(1) == ord('q'):
-#        break
