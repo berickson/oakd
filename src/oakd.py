@@ -21,6 +21,7 @@ rospy.init_node('image_converter', anonymous=True)
 rgb_pub = rospy.Publisher("/cameras/main/compressed",CompressedImage, queue_size = 1)
 left_pub = rospy.Publisher("/cameras/left/compressed",CompressedImage, queue_size = 1)
 right_pub = rospy.Publisher("/cameras/right/compressed",CompressedImage, queue_size = 1)
+disparity_pub = rospy.Publisher("/cameras/disparity/compressed",CompressedImage, queue_size = 1)
 # /bke
 
 # Pipeline tells DepthAI what operations to perform when running - you define all of the resources used and flows here
@@ -44,7 +45,36 @@ cam_right.setBoardSocket(depthai.CameraBoardSocket.RIGHT)
 cam_right.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_400_P)  # native 1280x800
 cam_right.setFps(15) # max 120fps
 
+# see https://docs.luxonis.com/projects/api/en/latest/samples/03_depth_preview
+# Closer-in minimum depth, disparity range is doubled (from 95 to 190):
+extended_disparity = False
+# Better accuracy for longer distance, fractional disparity 32-levels:
+subpixel = False
+# Better handling for occlusions:
+lr_check = False
+cam_disparity = pipeline.createStereoDepth()
+cam_disparity.setConfidenceThreshold(200)
+cam_disparity.setOutputDepth(False)
+# Options: MEDIAN_OFF, KERNEL_3x3, KERNEL_5x5, KERNEL_7x7 (default)
+median = depthai.StereoDepthProperties.MedianFilter.KERNEL_7x7 # For depth filtering
+cam_disparity.setMedianFilter(median)
+cam_disparity.setLeftRightCheck(lr_check)
+max_disparity = 95
 
+if extended_disparity: 
+    max_disparity *= 2 # Double the range
+    cam_disparity.setExtendedDisparity(extended_disparity)
+
+if subpixel: 
+    max_disparity *= 32 # 5 fractional bits, x32
+    cam_disparity.setSubpixel(subpixel)
+
+# When we get disparity to the host, we will multiply all values with the multiplier
+# for better visualization
+multiplier = 255 / max_disparity
+
+cam_left.out.link(cam_disparity.left)
+cam_right.out.link(cam_disparity.right)
 
 # Next, we want a neural network that will produce the detections
 detection_nn = pipeline.createNeuralNetwork()
@@ -59,14 +89,19 @@ cam_rgb.preview.link(detection_nn.input)
 xout_rgb = pipeline.createXLinkOut()
 xout_left = pipeline.createXLinkOut()
 xout_right = pipeline.createXLinkOut()
+xout_disparity = pipeline.createXLinkOut()
+
 # For the rgb camera output, we want the XLink stream to be named "rgb"
 xout_rgb.setStreamName("rgb")
 xout_left.setStreamName("left")
 xout_right.setStreamName("right")
+xout_disparity.setStreamName("disparity")
+
 # Linking camera preview to XLink input, so that the frames will be sent to host
 cam_rgb.preview.link(xout_rgb.input)
 cam_left.out.link(xout_left.input)
 cam_right.out.link(xout_right.input)
+cam_disparity.disparity.link(xout_disparity.input)
 
 # The same XLinkOut mechanism will be used to receive nn results
 xout_nn = pipeline.createXLinkOut()
@@ -83,6 +118,7 @@ q_rgb = device.getOutputQueue("rgb")
 q_left = device.getOutputQueue("left")
 q_right = device.getOutputQueue("right")
 q_nn = device.getOutputQueue("nn")
+q_disparity = device.getOutputQueue("disparity")
 
 # Here, some of the default values are defined. Frame will be an image from "rgb" stream, bboxes will contain nn results
 
@@ -102,8 +138,9 @@ while not rospy.is_shutdown():
     in_nn = q_nn.tryGet()
     in_left = q_left.tryGet()
     in_right = q_right.tryGet()
+    in_disparity = q_disparity.tryGet()
 
-    if in_rgb is None and in_nn is None and in_left is None:
+    if in_rgb is None and in_nn is None and in_left is None and in_disparity is None:
         time.sleep(0.01)
         continue
 
@@ -129,6 +166,19 @@ while not rospy.is_shutdown():
                 # Publish new image
                 rgb_pub.publish(msg)
 
+    if in_disparity is not None and disparity_pub.get_num_connections():
+        frame_disparity = in_disparity.getFrame()
+        frame_disparity = (frame_disparity*multiplier).astype(np.uint8)
+        # Available color maps: https://docs.opencv.org/3.4/d3/d50/group__imgproc__colormap.html
+        frame_disparity = cv2.applyColorMap(frame_disparity, cv2.COLORMAP_JET)
+
+        frame_disparity = np.ascontiguousarray(frame_disparity)
+        msg = CompressedImage()
+        msg.header.stamp = rospy.Time.now()
+        msg.format = "jpeg"
+        msg.data = np.array(cv2.imencode('.jpg', frame_disparity)[1]).tostring()
+        # Publish new image
+        disparity_pub.publish(msg)
 
 
     if in_left is not None and left_pub.get_num_connections():
@@ -145,11 +195,6 @@ while not rospy.is_shutdown():
             # Publish new image
             left_pub.publish(msg)
 
-
-
-            #left_msg = bridge.cv2_to_imgmsg(frame_left, "mono8")
-            #left_msg.header.frame_id = 'camera_left'
-            #left_pub.publish(left_msg)
 
 
     if in_right is not None and right_pub.get_num_connections():
