@@ -10,7 +10,7 @@ import numpy as np
 import roslib
 import rospy
 from std_msgs.msg import String
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
 from cv_bridge.boost.cv_bridge_boost import getCvType
 bridge = CvBridge()
@@ -18,9 +18,9 @@ import time
 # cv_image = bridge.imgmsg_to_cv2(image_message, desired_encoding='passthrough')
 
 rospy.init_node('image_converter', anonymous=True)
-image_pub = rospy.Publisher("/cameras/main",Image, queue_size = 1)
-left_pub = rospy.Publisher("/cameras/left",Image, queue_size = 1)
-right_pub = rospy.Publisher("/cameras/right",Image, queue_size = 1)
+rgb_pub = rospy.Publisher("/cameras/main/compressed",CompressedImage, queue_size = 1)
+left_pub = rospy.Publisher("/cameras/left/compressed",CompressedImage, queue_size = 1)
+right_pub = rospy.Publisher("/cameras/right/compressed",CompressedImage, queue_size = 1)
 # /bke
 
 # Pipeline tells DepthAI what operations to perform when running - you define all of the resources used and flows here
@@ -103,16 +103,16 @@ while not rospy.is_shutdown():
     in_left = q_left.tryGet()
     in_right = q_right.tryGet()
 
-    if in_rgb is None and in_nn and in_left is None:
+    if in_rgb is None and in_nn is None and in_left is None:
         time.sleep(0.01)
         continue
 
-    if in_rgb is not None:
+    if in_rgb is not None and rgb_pub.get_num_connections():
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
         shape = (3, in_rgb.getHeight(), in_rgb.getWidth())
         # Also, the array is transformed from CHW form into HWC
         frame = in_rgb.getData().reshape(shape).transpose(1, 2, 0).astype(np.uint8)
-        if image_pub.get_num_connections():
+        if True or image_pub.get_num_connections():
             frame = np.ascontiguousarray(frame)
             for raw_bbox in bboxes:
                 # for each bounding box, we first normalize it to match the frame size
@@ -120,32 +120,54 @@ while not rospy.is_shutdown():
                 # and then draw a rectangle on the frame to show the actual result
                 cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (255, 0, 0), 2)
             # frame = cv2.resize(frame,(200,200))
-            imgmsg = bridge.cv2_to_imgmsg(frame, "bgr8")
-            imgmsg.header.frame_id = 'camera'
-            image_pub.publish(imgmsg)
 
-    if in_left is not None:
+            if rgb_pub.get_num_connections():
+                msg = CompressedImage()
+                msg.header.stamp = rospy.Time.now()
+                msg.format = "jpeg"
+                msg.data = np.array(cv2.imencode('.jpg', frame)[1]).tostring()
+                # Publish new image
+                rgb_pub.publish(msg)
+
+
+
+    if in_left is not None and left_pub.get_num_connections():
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
         shape_left = (1, in_left.getHeight(), in_left.getWidth())
         # Also, the array is transformed from CHW form into HWC
         frame_left = in_left.getData().reshape(shape_left).transpose(1, 2, 0).astype(np.uint8)
-        if left_pub.get_num_connections():
+        if True or left_pub.get_num_connections():
             frame_left = np.ascontiguousarray(frame_left)
-            left_msg = bridge.cv2_to_imgmsg(frame_left, "mono8")
-            left_msg.header.frame_id = 'camera_left'
-            left_pub.publish(left_msg)
+            msg = CompressedImage()
+            msg.header.stamp = rospy.Time.now()
+            msg.format = "jpeg"
+            msg.data = np.array(cv2.imencode('.jpg', frame_left)[1]).tostring()
+            # Publish new image
+            left_pub.publish(msg)
 
 
-    if in_right is not None:
+
+            #left_msg = bridge.cv2_to_imgmsg(frame_left, "mono8")
+            #left_msg.header.frame_id = 'camera_left'
+            #left_pub.publish(left_msg)
+
+
+    if in_right is not None and right_pub.get_num_connections():
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
         shape_right = (1, in_right.getHeight(), in_right.getWidth())
         # Also, the array is transformed from CHW form into HWC
         frame_right = in_right.getData().reshape(shape_right).transpose(1, 2, 0).astype(np.uint8)
-        if right_pub.get_num_connections():
+        if True or right_pub.get_num_connections():
             frame_right = np.ascontiguousarray(frame_right)
-            right_msg = bridge.cv2_to_imgmsg(frame_right, "mono8")
-            right_msg.header.frame_id = 'camera_right'
-            right_pub.publish(right_msg)
+            msg = CompressedImage()
+            msg.header.stamp = rospy.Time.now()
+            msg.format = "jpeg"
+            msg.data = np.array(cv2.imencode('.jpg', frame_right)[1]).tostring()
+            right_pub.publish(msg)
+
+            #right_msg = bridge.cv2_to_imgmsg(frame_right, "mono8")
+            #right_msg.header.frame_id = 'camera_right'
+            #right_pub.publish(right_msg)
 
 
     if in_nn is not None:
