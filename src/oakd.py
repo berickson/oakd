@@ -145,7 +145,7 @@ while not rospy.is_shutdown():
     in_right = q_right.tryGet()
     in_disparity = q_disparity.tryGet()
 
-    if in_rgb is None and in_nn is None and in_left is None and in_disparity is None:
+    if in_rgb is None and in_nn is None and in_left is None  and in_right is None and in_disparity is None:
         time.sleep(0.01)
         continue
 
