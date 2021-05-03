@@ -188,7 +188,7 @@ while not rospy.is_shutdown():
                 msg.header.stamp = rospy.Time.now()
                 msg.header.frame_id = "camera"
                 msg.format = "jpeg"
-                msg.data = np.array(cv2.imencode('.jpg', frame)[1]).tostring()
+                msg.data = np.array(cv2.imencode('.jpg', frame)[1]).tobytes()
                 # Publish new image
                 rgb_pub.publish(msg)
 
@@ -207,7 +207,7 @@ while not rospy.is_shutdown():
             msg = CompressedImage()
             msg.header.stamp = rospy.Time.now()
             msg.format = "jpeg"
-            msg.data = np.array(cv2.imencode('.jpg', frame_disparity)[1]).tostring()
+            msg.data = np.array(cv2.imencode('.jpg', frame_disparity)[1]).tobytes()
             # Publish new image
             disparity_pub.publish(msg)
 
@@ -226,7 +226,7 @@ while not rospy.is_shutdown():
             msg = CompressedImage()
             msg.header.stamp = rospy.Time.now()
             msg.format = "jpeg"
-            msg.data = np.array(cv2.imencode('.jpg', frame_left)[1]).tostring()
+            msg.data = np.array(cv2.imencode('.jpg', frame_left)[1]).tobytes()
             # Publish new image
             left_pub.publish(msg)
 
@@ -246,7 +246,7 @@ while not rospy.is_shutdown():
             msg = CompressedImage()
             msg.header.stamp = rospy.Time.now()
             msg.format = "jpeg"
-            msg.data = np.array(cv2.imencode('.jpg', frame_right)[1]).tostring()
+            msg.data = np.array(cv2.imencode('.jpg', frame_right)[1]).tobytes()
             right_pub.publish(msg)
 
             #right_msg = bridge.cv2_to_imgmsg(frame_right, "mono8")
