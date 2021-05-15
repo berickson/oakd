@@ -18,9 +18,9 @@ import time
 # cv_image = bridge.imgmsg_to_cv2(image_message, desired_encoding='passthrough')
 
 rospy.init_node('image_converter', anonymous=True)
-rgb_pub = rospy.Publisher("/cameras_rgb/compressed",CompressedImage, queue_size = 1)
-rgb_raw_pub = rospy.Publisher("/cameras_rgb",Image, queue_size = 1)
-rgb_info_pub = rospy.Publisher("/camera_info", CameraInfo, queue_size = 1)
+rgb_pub = rospy.Publisher("/cameras/rgb/image_raw/compressed",CompressedImage, queue_size = 1)
+rgb_raw_pub = rospy.Publisher("/cameras/rgb/image_raw",Image, queue_size = 1)
+rgb_info_pub = rospy.Publisher("/cameras/rgb/camera_info", CameraInfo, queue_size = 1)
 left_pub = rospy.Publisher("/cameras/left/compressed",CompressedImage, queue_size = 1)
 left_raw_pub = rospy.Publisher("/cameras/left",Image, queue_size = 1)
 right_pub = rospy.Publisher("/cameras/right/compressed",CompressedImage, queue_size = 1)
@@ -145,6 +145,8 @@ while not rospy.is_shutdown():
     in_right = q_right.tryGet()
     in_disparity = q_disparity.tryGet()
 
+    timestamp = rospy.get_rostime()
+
     if in_rgb is None and in_nn is None and in_left is None  and in_right is None and in_disparity is None:
         time.sleep(0.01)
         continue
@@ -153,6 +155,7 @@ while not rospy.is_shutdown():
         # publish the camera info
         rgb_info_msg = CameraInfo()
         rgb_info_msg.header.frame_id = "camera"
+        rgb_info_msg.header.stamp = timestamp
         rgb_info_msg.width = in_rgb.getWidth()
         rgb_info_msg.height = in_rgb.getHeight()
         rgb_info_msg.distortion_model = "plumb_bob"
@@ -180,12 +183,13 @@ while not rospy.is_shutdown():
             if rgb_raw_pub.get_num_connections():
                 msg = bridge.cv2_to_imgmsg(frame, "bgr8")
                 msg.header.frame_id = "camera"
+                msg.header.stamp = timestamp
                 rgb_raw_pub.publish(msg)
 
 
             if rgb_pub.get_num_connections():
                 msg = CompressedImage()
-                msg.header.stamp = rospy.Time.now()
+                msg.header.stamp = timestamp
                 msg.header.frame_id = "camera"
                 msg.format = "jpeg"
                 msg.data = np.array(cv2.imencode('.jpg', frame)[1]).tobytes()
