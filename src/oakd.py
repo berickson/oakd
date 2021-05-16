@@ -54,6 +54,7 @@ def yaml_to_CameraInfo(yaml_fname):
 yaml_folder = os.path.dirname(__file__)
 left_camera_info_msg = yaml_to_CameraInfo(yaml_folder+"/left.yaml")
 right_camera_info_msg = yaml_to_CameraInfo(yaml_folder+"/right.yaml")
+rgb_camera_info_msg = yaml_to_CameraInfo(yaml_folder+"/rgb.yaml")
 
 
 rospy.init_node('image_converter', anonymous=True)
@@ -198,18 +199,10 @@ while not rospy.is_shutdown():
 
     if in_rgb is not None and (rgb_pub.get_num_connections() or rgb_raw_pub.get_num_connections()):
         # rgb camera_info
-        rgb_info_msg = CameraInfo()
-        rgb_info_msg.header.frame_id = "camera"
-        rgb_info_msg.header.stamp = timestamp
-        rgb_info_msg.width = in_rgb.getWidth()
-        rgb_info_msg.height = in_rgb.getHeight()
-        rgb_info_msg.distortion_model = "plumb_bob"
-        rgb_info_msg.D = [0.229778, -1.009550, 0.000916, 0.000635, 0.000000]
-        rgb_info_msg.K = [413.07664,   0.     , 148.33764, 0.     , 413.04617, 149.70721,  0.     ,   0.     ,   1.     ]
-        rgb_info_msg.P =  [416.99515,   0.     , 147.93216,   0.     ,
-           0.     , 416.96396, 149.35254,   0.     ,
-           0.     ,   0.     ,   1.     ,   0.     ]
-        rgb_info_pub.publish(rgb_info_msg)
+
+        rgb_camera_info_msg.header.frame_id = "camera"
+        rgb_camera_info_msg.header.stamp = timestamp
+        rgb_info_pub.publish(rgb_camera_info_msg)
 
 
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
@@ -265,24 +258,7 @@ while not rospy.is_shutdown():
 
         left_camera_info_msg.header.frame_id = "stereo_left"
         left_camera_info_msg.header.stamp = timestamp
-        # left camera_info
-
-        # left_info_msg = CameraInfo()
-        # left_info_msg.header.frame_id = "stereo_left"
-        # left_info_msg.header.stamp = timestamp
-        # left_info_msg.width = in_left.getWidth()
-        # left_info_msg.height = in_left.getHeight()
-        # left_info_msg.distortion_model = "plumb_bob"
-        # left_info_msg.D = [0.069749, -0.138931, 0.002781, -0.000061, 0.000000]
-        # left_info_msg.K =  [434.95325,   0.     , 317.94036,
-        #    0.     , 435.16725, 205.97109,
-        #    0.     ,   0.     ,   1.     ]
-        # left_info_msg.P = [449.59432,   0.     , 331.80346,   0.     ,
-        #    0.     , 449.59432, 203.92864,   0.     ,
-        #    0.     ,   0.     ,   1.     ,   0.     ]
-
         left_info_pub.publish(left_camera_info_msg)
-
 
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
         shape_left = (1, in_left.getHeight(), in_left.getWidth())
@@ -307,23 +283,6 @@ while not rospy.is_shutdown():
 
     if in_right is not None and (right_pub.get_num_connections() or right_raw_pub.get_num_connections()):
 
-        # right camera_info
-        # right_info_msg = CameraInfo()
-        # right_info_msg.header.frame_id = "stereo_right"
-        # right_info_msg.header.stamp = timestamp
-        # right_info_msg.width = in_right.getWidth()
-        # right_info_msg.height = in_right.getHeight()
-        # right_info_msg.distortion_model = "plumb_bob"
-        # right_info_msg.D =  [0.041849, -0.059572, 0.003564, 0.001715, 0.000000]
-        # right_info_msg.K = [435.89226,   0.     , 321.95903,
-        #    0.     , 436.29866, 197.37017,
-        #    0.     ,   0.     ,   1.     ]
-        # right_info_msg.P =  [449.59432,   0.     , 331.80346, -33.75446,
-        #    0.     , 449.59432, 203.92864,   0.     ,
-        #    0.     ,   0.     ,   1.     ,   0.     ]
-        # right_info_pub.publish(right_info_msg)
-
-
         right_camera_info_msg.header.frame_id = "stereo_right"
         right_camera_info_msg.header.stamp = timestamp
         right_info_pub.publish(right_camera_info_msg)
@@ -345,10 +304,6 @@ while not rospy.is_shutdown():
             msg.format = "jpeg"
             msg.data = np.array(cv2.imencode('.jpg', frame_right)[1]).tobytes()
             right_pub.publish(msg)
-
-            #right_msg = bridge.cv2_to_imgmsg(frame_right, "mono8")
-            #right_msg.header.frame_id = 'camera_right'
-            #right_pub.publish(right_msg)
 
 
     if in_nn is not None:
