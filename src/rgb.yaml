@@ -1,0 +1,29 @@
+image_width: 300
+image_height: 300
+camera_name: narrow_stereo
+camera_matrix:
+  rows: 3
+  cols: 3
+  # K
+  data: [413.07664,   0.     , 148.33764,
+           0.     , 413.04617, 149.70721,
+           0.     ,   0.     ,   1.     ]
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  # D
+  data: [0.229778, -1.009550, 0.000916, 0.000635, 0.000000]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1., 0., 0.,
+         0., 1., 0.,
+         0., 0., 1.]
+projection_matrix:
+  rows: 3
+  cols: 4
+  # P
+  data: [416.99515,   0.     , 147.93216,   0.     ,
+           0.     , 416.96396, 149.35254,   0.     ,
+           0.     ,   0.     ,   1.     ,   0.     ]

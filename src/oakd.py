@@ -21,10 +21,12 @@ rospy.init_node('image_converter', anonymous=True)
 rgb_pub = rospy.Publisher("/cameras/rgb/image_raw/compressed",CompressedImage, queue_size = 1)
 rgb_raw_pub = rospy.Publisher("/cameras/rgb/image_raw",Image, queue_size = 1)
 rgb_info_pub = rospy.Publisher("/cameras/rgb/camera_info", CameraInfo, queue_size = 1)
-left_pub = rospy.Publisher("/cameras/left/compressed",CompressedImage, queue_size = 1)
-left_raw_pub = rospy.Publisher("/cameras/left",Image, queue_size = 1)
-right_pub = rospy.Publisher("/cameras/right/compressed",CompressedImage, queue_size = 1)
-right_raw_pub = rospy.Publisher("/cameras/right",Image, queue_size = 1)
+left_info_pub = rospy.Publisher("/cameras/left/camera_info", CameraInfo, queue_size = 1)
+right_info_pub = rospy.Publisher("/cameras/right/camera_info", CameraInfo, queue_size = 1)
+left_pub = rospy.Publisher("/cameras/left/image_raw/compressed",CompressedImage, queue_size = 1)
+left_raw_pub = rospy.Publisher("/cameras/left/image_raw",Image, queue_size = 1)
+right_pub = rospy.Publisher("/cameras/right/image_raw/compressed",CompressedImage, queue_size = 1)
+right_raw_pub = rospy.Publisher("/cameras/right/image_raw",Image, queue_size = 1)
 disparity_raw_pub = rospy.Publisher("/cameras/disparity",Image, queue_size = 1)
 disparity_pub = rospy.Publisher("/cameras/disparity/compressed",CompressedImage, queue_size = 1)
 # /bke
@@ -42,11 +44,13 @@ cam_rgb.setInterleaved(False)
 # see https://docs.luxonis.com/projects/api/en/latest/samples/02_mono_preview/#mono-preview
 cam_left = pipeline.createMonoCamera()
 cam_left.setBoardSocket(depthai.CameraBoardSocket.LEFT)
+#cam_left.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_800_P) # native 1280x800
 cam_left.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_400_P) # native 1280x800
 cam_left.setFps(15) # max 120fps
 
 cam_right = pipeline.createMonoCamera()
 cam_right.setBoardSocket(depthai.CameraBoardSocket.RIGHT)
+#cam_right.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_800_P)  # native 1280x800
 cam_right.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_400_P)  # native 1280x800
 cam_right.setFps(15) # max 120fps
 
@@ -59,7 +63,7 @@ subpixel = False
 lr_check = False
 cam_disparity = pipeline.createStereoDepth()
 cam_disparity.setConfidenceThreshold(200)
-cam_disparity.setOutputDepth(False)
+#cam_disparity.setOutputDepth(False)
 # Options: MEDIAN_OFF, KERNEL_3x3, KERNEL_5x5, KERNEL_7x7 (default)
 median = depthai.StereoDepthProperties.MedianFilter.KERNEL_7x7 # For depth filtering
 cam_disparity.setMedianFilter(median)
@@ -152,7 +156,7 @@ while not rospy.is_shutdown():
         continue
 
     if in_rgb is not None and (rgb_pub.get_num_connections() or rgb_raw_pub.get_num_connections()):
-        # publish the camera info
+        # rgb camera_info
         rgb_info_msg = CameraInfo()
         rgb_info_msg.header.frame_id = "camera"
         rgb_info_msg.header.stamp = timestamp
@@ -165,7 +169,6 @@ while not rospy.is_shutdown():
            0.     , 416.96396, 149.35254,   0.     ,
            0.     ,   0.     ,   1.     ,   0.     ]
         rgb_info_pub.publish(rgb_info_msg)
-
 
 
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
@@ -217,17 +220,33 @@ while not rospy.is_shutdown():
 
 
     if in_left is not None and (left_pub.get_num_connections() or left_raw_pub.get_num_connections()):
+
+        # left camera_info
+        left_info_msg = CameraInfo()
+        left_info_msg.header.frame_id = "stereo_left"
+        left_info_msg.header.stamp = timestamp
+        left_info_msg.width = in_left.getWidth()
+        left_info_msg.height = in_left.getHeight()
+        left_info_msg.distortion_model = "plumb_bob"
+        left_info_msg.D = [0.079777, -0.184469, 0.000090, 0.000352, 0.000000]
+        left_info_msg.K =  [427.41084,   0.     , 316.31721, 0.     , 427.13123, 201.76592, 0.     ,   0.     ,   1.     ]
+        left_info_msg.P = [15053.49444,     0.     ,  3892.0159 ,     0.     ,   0.     , 15053.49444,  2266.83304,     0.     ,             0.     ,     0.     ,     1.     ,     0.     ] 
+
+        left_info_pub.publish(left_info_msg)
+
+
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
         shape_left = (1, in_left.getHeight(), in_left.getWidth())
         # Also, the array is transformed from CHW form into HWC
         frame_left = in_left.getData().reshape(shape_left).transpose(1, 2, 0).astype(np.uint8)
         if left_raw_pub.get_num_connections():
             msg = bridge.cv2_to_imgmsg(frame_left, "mono8")
-            msg.header.frame_id = 'camera'
+            msg.header.frame_id = 'stereo_left'
             left_raw_pub.publish(msg)
         if left_pub.get_num_connections():
             frame_left = np.ascontiguousarray(frame_left)
             msg = CompressedImage()
+            msg.header.frame_id = 'stereo_left'
             msg.header.stamp = rospy.Time.now()
             msg.format = "jpeg"
             msg.data = np.array(cv2.imencode('.jpg', frame_left)[1]).tobytes()
@@ -237,18 +256,36 @@ while not rospy.is_shutdown():
 
 
     if in_right is not None and (right_pub.get_num_connections() or right_raw_pub.get_num_connections()):
+
+        # right camera_info
+        right_info_msg = CameraInfo()
+        right_info_msg.header.frame_id = "stereo_right"
+        right_info_msg.header.stamp = timestamp
+        right_info_msg.width = in_right.getWidth()
+        right_info_msg.height = in_right.getHeight()
+        right_info_msg.distortion_model = "plumb_bob"
+        right_info_msg.D = [0.085168, -0.200509, 0.003253, -0.000173, 0.000000]
+        right_info_msg.K = [427.65993,   0.     , 321.15395,
+           0.     , 427.59265, 195.4265 ,
+           0.     ,   0.     ,   1.     ]
+        right_info_msg.P =  [15053.49444,     0.     ,  3892.0159 , -1200.67153,
+             0.     , 15053.49444,  2266.83304,     0.     ,
+             0.     ,     0.     ,     1.     ,     0.     ]
+        right_info_pub.publish(right_info_msg)
+
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
         shape_right = (1, in_right.getHeight(), in_right.getWidth())
         # Also, the array is transformed from CHW form into HWC
         frame_right = in_right.getData().reshape(shape_right).transpose(1, 2, 0).astype(np.uint8)
         if right_raw_pub.get_num_connections():
             msg = bridge.cv2_to_imgmsg(frame_right, "mono8")
-            msg.header.frame_id = 'camera'
+            msg.header.frame_id = 'stereo_right'
             right_raw_pub.publish(msg)
         if right_pub.get_num_connections():
             frame_right = np.ascontiguousarray(frame_right)
             msg = CompressedImage()
             msg.header.stamp = rospy.Time.now()
+            msg.header.frame_id = 'stereo_right'
             msg.format = "jpeg"
             msg.data = np.array(cv2.imencode('.jpg', frame_right)[1]).tobytes()
             right_pub.publish(msg)
