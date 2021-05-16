@@ -15,7 +15,46 @@ from cv_bridge import CvBridge, CvBridgeError
 from cv_bridge.boost.cv_bridge_boost import getCvType
 bridge = CvBridge()
 import time
+import yaml
+import os.path
+
 # cv_image = bridge.imgmsg_to_cv2(image_message, desired_encoding='passthrough')
+
+# see https://gist.github.com/rossbar/ebb282c3b73c41c1404123de6cea4771
+def yaml_to_CameraInfo(yaml_fname):
+    """
+    Parse a yaml file containing camera calibration data (as produced by 
+    rosrun camera_calibration cameracalibrator.py) into a 
+    sensor_msgs/CameraInfo msg.
+    
+    Parameters
+    ----------
+    yaml_fname : str
+        Path to yaml file containing camera calibration data
+    Returns
+    -------
+    camera_info_msg : sensor_msgs.msg.CameraInfo
+        A sensor_msgs.msg.CameraInfo message containing the camera calibration
+        data
+    """
+    # Load data from file
+    with open(yaml_fname, "r") as file_handle:
+        calib_data = yaml.safe_load(file_handle)
+    # Parse
+    camera_info_msg = CameraInfo()
+    camera_info_msg.width = calib_data["image_width"]
+    camera_info_msg.height = calib_data["image_height"]
+    camera_info_msg.K = calib_data["camera_matrix"]["data"]
+    camera_info_msg.D = calib_data["distortion_coefficients"]["data"]
+    camera_info_msg.R = calib_data["rectification_matrix"]["data"]
+    camera_info_msg.P = calib_data["projection_matrix"]["data"]
+    camera_info_msg.distortion_model = calib_data["distortion_model"]
+    return camera_info_msg
+
+yaml_folder = os.path.dirname(__file__)
+left_camera_info_msg = yaml_to_CameraInfo(yaml_folder+"/left.yaml")
+right_camera_info_msg = yaml_to_CameraInfo(yaml_folder+"/right.yaml")
+
 
 rospy.init_node('image_converter', anonymous=True)
 rgb_pub = rospy.Publisher("/cameras/rgb/image_raw/compressed",CompressedImage, queue_size = 1)
@@ -209,12 +248,13 @@ while not rospy.is_shutdown():
         if disparity_raw_pub.get_num_connections():
             msg = bridge.cv2_to_imgmsg(frame_disparity, "bgr8")
             msg.header.frame_id = 'camera'
+            msg.header.stamp = timestamp
             disparity_raw_pub.publish(msg)
 
         if disparity_pub.get_num_connections():
             frame_disparity = np.ascontiguousarray(frame_disparity)
             msg = CompressedImage()
-            msg.header.stamp = rospy.Time.now()
+            msg.header.stamp = timestamp
             msg.format = "jpeg"
             msg.data = np.array(cv2.imencode('.jpg', frame_disparity)[1]).tobytes()
             # Publish new image
@@ -223,22 +263,25 @@ while not rospy.is_shutdown():
 
     if in_left is not None and (left_pub.get_num_connections() or left_raw_pub.get_num_connections()):
 
+        left_camera_info_msg.header.frame_id = "stereo_left"
+        left_camera_info_msg.header.stamp = timestamp
         # left camera_info
-        left_info_msg = CameraInfo()
-        left_info_msg.header.frame_id = "stereo_left"
-        left_info_msg.header.stamp = timestamp
-        left_info_msg.width = in_left.getWidth()
-        left_info_msg.height = in_left.getHeight()
-        left_info_msg.distortion_model = "plumb_bob"
-        left_info_msg.D = [0.069749, -0.138931, 0.002781, -0.000061, 0.000000]
-        left_info_msg.K =  [434.95325,   0.     , 317.94036,
-           0.     , 435.16725, 205.97109,
-           0.     ,   0.     ,   1.     ]
-        left_info_msg.P = [449.59432,   0.     , 331.80346,   0.     ,
-           0.     , 449.59432, 203.92864,   0.     ,
-           0.     ,   0.     ,   1.     ,   0.     ]
 
-        left_info_pub.publish(left_info_msg)
+        # left_info_msg = CameraInfo()
+        # left_info_msg.header.frame_id = "stereo_left"
+        # left_info_msg.header.stamp = timestamp
+        # left_info_msg.width = in_left.getWidth()
+        # left_info_msg.height = in_left.getHeight()
+        # left_info_msg.distortion_model = "plumb_bob"
+        # left_info_msg.D = [0.069749, -0.138931, 0.002781, -0.000061, 0.000000]
+        # left_info_msg.K =  [434.95325,   0.     , 317.94036,
+        #    0.     , 435.16725, 205.97109,
+        #    0.     ,   0.     ,   1.     ]
+        # left_info_msg.P = [449.59432,   0.     , 331.80346,   0.     ,
+        #    0.     , 449.59432, 203.92864,   0.     ,
+        #    0.     ,   0.     ,   1.     ,   0.     ]
+
+        left_info_pub.publish(left_camera_info_msg)
 
 
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
@@ -248,12 +291,13 @@ while not rospy.is_shutdown():
         if left_raw_pub.get_num_connections():
             msg = bridge.cv2_to_imgmsg(frame_left, "mono8")
             msg.header.frame_id = 'stereo_left'
+            msg.header.stamp = timestamp
             left_raw_pub.publish(msg)
         if left_pub.get_num_connections():
             frame_left = np.ascontiguousarray(frame_left)
             msg = CompressedImage()
             msg.header.frame_id = 'stereo_left'
-            msg.header.stamp = rospy.Time.now()
+            msg.header.stamp = timestamp
             msg.format = "jpeg"
             msg.data = np.array(cv2.imencode('.jpg', frame_left)[1]).tobytes()
             # Publish new image
@@ -264,20 +308,25 @@ while not rospy.is_shutdown():
     if in_right is not None and (right_pub.get_num_connections() or right_raw_pub.get_num_connections()):
 
         # right camera_info
-        right_info_msg = CameraInfo()
-        right_info_msg.header.frame_id = "stereo_right"
-        right_info_msg.header.stamp = timestamp
-        right_info_msg.width = in_right.getWidth()
-        right_info_msg.height = in_right.getHeight()
-        right_info_msg.distortion_model = "plumb_bob"
-        right_info_msg.D =  [0.041849, -0.059572, 0.003564, 0.001715, 0.000000]
-        right_info_msg.K = [435.89226,   0.     , 321.95903,
-           0.     , 436.29866, 197.37017,
-           0.     ,   0.     ,   1.     ]
-        right_info_msg.P =  [449.59432,   0.     , 331.80346, -33.75446,
-           0.     , 449.59432, 203.92864,   0.     ,
-           0.     ,   0.     ,   1.     ,   0.     ]
-        right_info_pub.publish(right_info_msg)
+        # right_info_msg = CameraInfo()
+        # right_info_msg.header.frame_id = "stereo_right"
+        # right_info_msg.header.stamp = timestamp
+        # right_info_msg.width = in_right.getWidth()
+        # right_info_msg.height = in_right.getHeight()
+        # right_info_msg.distortion_model = "plumb_bob"
+        # right_info_msg.D =  [0.041849, -0.059572, 0.003564, 0.001715, 0.000000]
+        # right_info_msg.K = [435.89226,   0.     , 321.95903,
+        #    0.     , 436.29866, 197.37017,
+        #    0.     ,   0.     ,   1.     ]
+        # right_info_msg.P =  [449.59432,   0.     , 331.80346, -33.75446,
+        #    0.     , 449.59432, 203.92864,   0.     ,
+        #    0.     ,   0.     ,   1.     ,   0.     ]
+        # right_info_pub.publish(right_info_msg)
+
+
+        right_camera_info_msg.header.frame_id = "stereo_right"
+        right_camera_info_msg.header.stamp = timestamp
+        right_info_pub.publish(right_camera_info_msg)
 
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
         shape_right = (1, in_right.getHeight(), in_right.getWidth())
@@ -286,11 +335,12 @@ while not rospy.is_shutdown():
         if right_raw_pub.get_num_connections():
             msg = bridge.cv2_to_imgmsg(frame_right, "mono8")
             msg.header.frame_id = 'stereo_right'
+            msg.header.stamp = timestamp
             right_raw_pub.publish(msg)
         if right_pub.get_num_connections():
             frame_right = np.ascontiguousarray(frame_right)
             msg = CompressedImage()
-            msg.header.stamp = rospy.Time.now()
+            msg.header.stamp = timestamp
             msg.header.frame_id = 'stereo_right'
             msg.format = "jpeg"
             msg.data = np.array(cv2.imencode('.jpg', frame_right)[1]).tobytes()
