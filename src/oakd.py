@@ -34,9 +34,11 @@ disparity_pub = rospy.Publisher("/cameras/disparity/compressed",CompressedImage,
 # Pipeline tells DepthAI what operations to perform when running - you define all of the resources used and flows here
 pipeline = depthai.Pipeline()
 
+fps = 10
+
 # First, we want the Color camera as the output
 cam_rgb = pipeline.createColorCamera()
-cam_rgb.setFps(15)
+cam_rgb.setFps(fps)
 cam_rgb.setPreviewSize(300, 300)  # 300x300 will be the preview frame size, available as 'preview' output of the node
 cam_rgb.setInterleaved(False)
 
@@ -46,13 +48,13 @@ cam_left = pipeline.createMonoCamera()
 cam_left.setBoardSocket(depthai.CameraBoardSocket.LEFT)
 #cam_left.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_800_P) # native 1280x800
 cam_left.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_400_P) # native 1280x800
-cam_left.setFps(15) # max 120fps
+cam_left.setFps(fps) # max 120fps
 
 cam_right = pipeline.createMonoCamera()
 cam_right.setBoardSocket(depthai.CameraBoardSocket.RIGHT)
 #cam_right.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_800_P)  # native 1280x800
 cam_right.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_400_P)  # native 1280x800
-cam_right.setFps(15) # max 120fps
+cam_right.setFps(fps) # max 120fps
 
 # see https://docs.luxonis.com/projects/api/en/latest/samples/03_depth_preview
 # Closer-in minimum depth, disparity range is doubled (from 95 to 190):
@@ -228,9 +230,13 @@ while not rospy.is_shutdown():
         left_info_msg.width = in_left.getWidth()
         left_info_msg.height = in_left.getHeight()
         left_info_msg.distortion_model = "plumb_bob"
-        left_info_msg.D = [0.079777, -0.184469, 0.000090, 0.000352, 0.000000]
-        left_info_msg.K =  [427.41084,   0.     , 316.31721, 0.     , 427.13123, 201.76592, 0.     ,   0.     ,   1.     ]
-        left_info_msg.P = [15053.49444,     0.     ,  3892.0159 ,     0.     ,   0.     , 15053.49444,  2266.83304,     0.     ,             0.     ,     0.     ,     1.     ,     0.     ] 
+        left_info_msg.D = [0.069749, -0.138931, 0.002781, -0.000061, 0.000000]
+        left_info_msg.K =  [434.95325,   0.     , 317.94036,
+           0.     , 435.16725, 205.97109,
+           0.     ,   0.     ,   1.     ]
+        left_info_msg.P = [449.59432,   0.     , 331.80346,   0.     ,
+           0.     , 449.59432, 203.92864,   0.     ,
+           0.     ,   0.     ,   1.     ,   0.     ]
 
         left_info_pub.publish(left_info_msg)
 
@@ -264,13 +270,13 @@ while not rospy.is_shutdown():
         right_info_msg.width = in_right.getWidth()
         right_info_msg.height = in_right.getHeight()
         right_info_msg.distortion_model = "plumb_bob"
-        right_info_msg.D = [0.085168, -0.200509, 0.003253, -0.000173, 0.000000]
-        right_info_msg.K = [427.65993,   0.     , 321.15395,
-           0.     , 427.59265, 195.4265 ,
+        right_info_msg.D =  [0.041849, -0.059572, 0.003564, 0.001715, 0.000000]
+        right_info_msg.K = [435.89226,   0.     , 321.95903,
+           0.     , 436.29866, 197.37017,
            0.     ,   0.     ,   1.     ]
-        right_info_msg.P =  [15053.49444,     0.     ,  3892.0159 , -1200.67153,
-             0.     , 15053.49444,  2266.83304,     0.     ,
-             0.     ,     0.     ,     1.     ,     0.     ]
+        right_info_msg.P =  [449.59432,   0.     , 331.80346, -33.75446,
+           0.     , 449.59432, 203.92864,   0.     ,
+           0.     ,   0.     ,   1.     ,   0.     ]
         right_info_pub.publish(right_info_msg)
 
         # When data from rgb stream is received, we need to transform it from 1D flat array into 3 x height x width one
