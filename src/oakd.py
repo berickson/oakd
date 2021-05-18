@@ -79,7 +79,8 @@ fps = 10
 # First, we want the Color camera as the output
 cam_rgb = pipeline.createColorCamera()
 cam_rgb.setFps(fps)
-cam_rgb.setPreviewSize(300, 300)  # 300x300 will be the preview frame size, available as 'preview' output of the node
+cam_rgb.setPreviewSize(640, 400) # For some reason, using native resolution cuts of sides, this provides wider field of view thatn 507x380
+#cam_rgb.setPreviewSize(507, 380) # This strange number based on native image size of 4056x3040 / 8
 cam_rgb.setInterleaved(False)
 
 
@@ -93,7 +94,7 @@ cam_left.setFps(fps) # max 120fps
 cam_right = pipeline.createMonoCamera()
 cam_right.setBoardSocket(depthai.CameraBoardSocket.RIGHT)
 #cam_right.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_800_P)  # native 1280x800
-cam_right.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_400_P)  # native 1280x800
+cam_right.setResolution(depthai.MonoCameraProperties.SensorResolution.THE_400_P)  # native 1280x800, this is 640x400
 cam_right.setFps(fps) # max 120fps
 
 # see https://docs.luxonis.com/projects/api/en/latest/samples/03_depth_preview
@@ -137,6 +138,10 @@ detection_nn.setBlobPath(blob_path)
 cam_rgb.preview.link(detection_nn.input)
 
 # XLinkOut is a "way out" from the device. Any data you want to transfer to host need to be send via XLink
+control_in = pipeline.createXLinkIn()
+control_in.setStreamName('control')
+control_in.out.link(cam_rgb.inputControl)
+
 xout_rgb = pipeline.createXLinkOut()
 xout_left = pipeline.createXLinkOut()
 xout_right = pipeline.createXLinkOut()
@@ -170,6 +175,23 @@ q_left = device.getOutputQueue("left")
 q_right = device.getOutputQueue("right")
 q_nn = device.getOutputQueue("nn")
 q_disparity = device.getOutputQueue("disparity")
+q_control = device.getInputQueue("control")
+
+
+# turn off autofocus
+
+control_message = depthai.CameraControl()
+control_message.setAutoFocusMode(depthai.CameraControl.AutoFocusMode.OFF)
+#q_control.send(control_message)
+lens_position = 125
+#control_message = depthai.CameraControl()
+control_message.setManualFocus(lens_position)
+q_control.send(control_message)
+
+
+# cv2.putText(image, text, org, font, fontScale, color[, thickness[, lineType[, bottomLeftOrigin]]])
+#cv2.putText(frame, "lens_position: "+str(lens_position//10), (0,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0))
+
 
 # Here, some of the default values are defined. Frame will be an image from "rgb" stream, bboxes will contain nn results
 
@@ -181,6 +203,7 @@ bboxes = []
 def frame_norm(frame, bbox):
     return (np.array(bbox) * np.array([*frame.shape[:2], *frame.shape[:2]])[::-1]).astype(int)
 
+lens_position = 0
 
 # Main host-side application loop
 while not rospy.is_shutdown():
@@ -216,6 +239,7 @@ while not rospy.is_shutdown():
                 bbox = frame_norm(frame, raw_bbox)
                 # and then draw a rectangle on the frame to show the actual result
                 cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (255, 0, 0), 2)
+
             # frame = cv2.resize(frame,(200,200))
             if rgb_raw_pub.get_num_connections():
                 msg = bridge.cv2_to_imgmsg(frame, "bgr8")
