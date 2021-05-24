@@ -17,6 +17,7 @@ bridge = CvBridge()
 import time
 import yaml
 import os.path
+from copy import deepcopy
 
 # cv_image = bridge.imgmsg_to_cv2(image_message, desired_encoding='passthrough')
 
@@ -55,6 +56,7 @@ yaml_folder = os.path.dirname(__file__)
 left_camera_info_msg = yaml_to_CameraInfo(yaml_folder+"/left.yaml")
 right_camera_info_msg = yaml_to_CameraInfo(yaml_folder+"/right.yaml")
 rgb_camera_info_msg = yaml_to_CameraInfo(yaml_folder+"/rgb.yaml")
+depth_camera_info_msg = deepcopy(right_camera_info_msg)
 
 
 rospy.init_node('image_converter', anonymous=True)
@@ -69,12 +71,15 @@ right_pub = rospy.Publisher("/cameras/right/image_raw/compressed",CompressedImag
 right_raw_pub = rospy.Publisher("/cameras/right/image_raw",Image, queue_size = 1)
 disparity_raw_pub = rospy.Publisher("/cameras/disparity",Image, queue_size = 1)
 disparity_pub = rospy.Publisher("/cameras/disparity/compressed",CompressedImage, queue_size = 1)
+depth_pub = rospy.Publisher("/cameras/depth/image_raw", Image, queue_size = 1)
+depth_compressed_pub = rospy.Publisher("/cameras/depth/image_raw/compressed",CompressedImage, queue_size = 1)
+depth_info_pub = rospy.Publisher("/cameras/depth/camera_info", CameraInfo, queue_size = 1)
 # /bke
 
 # Pipeline tells DepthAI what operations to perform when running - you define all of the resources used and flows here
 pipeline = depthai.Pipeline()
 
-fps = 10
+fps = 3
 
 # First, we want the Color camera as the output
 cam_rgb = pipeline.createColorCamera()
@@ -105,7 +110,7 @@ subpixel = False
 # Better handling for occlusions:
 lr_check = False
 cam_disparity = pipeline.createStereoDepth()
-cam_disparity.setConfidenceThreshold(200)
+cam_disparity.setConfidenceThreshold(0)
 #cam_disparity.setOutputDepth(False)
 # Options: MEDIAN_OFF, KERNEL_3x3, KERNEL_5x5, KERNEL_7x7 (default)
 median = depthai.StereoDepthProperties.MedianFilter.KERNEL_7x7 # For depth filtering
@@ -146,18 +151,21 @@ xout_rgb = pipeline.createXLinkOut()
 xout_left = pipeline.createXLinkOut()
 xout_right = pipeline.createXLinkOut()
 xout_disparity = pipeline.createXLinkOut()
+xout_depth = pipeline.createXLinkOut()
 
 # For the rgb camera output, we want the XLink stream to be named "rgb"
 xout_rgb.setStreamName("rgb")
 xout_left.setStreamName("left")
 xout_right.setStreamName("right")
 xout_disparity.setStreamName("disparity")
+xout_depth.setStreamName("depth")
 
 # Linking camera preview to XLink input, so that the frames will be sent to host
 cam_rgb.preview.link(xout_rgb.input)
 cam_left.out.link(xout_left.input)
 cam_right.out.link(xout_right.input)
 cam_disparity.disparity.link(xout_disparity.input)
+cam_disparity.depth.link(xout_depth.input)
 
 # The same XLinkOut mechanism will be used to receive nn results
 xout_nn = pipeline.createXLinkOut()
@@ -175,6 +183,7 @@ q_left = device.getOutputQueue("left")
 q_right = device.getOutputQueue("right")
 q_nn = device.getOutputQueue("nn")
 q_disparity = device.getOutputQueue("disparity")
+q_depth = device.getOutputQueue("depth")
 q_control = device.getInputQueue("control")
 
 
@@ -213,10 +222,11 @@ while not rospy.is_shutdown():
     in_left = q_left.tryGet()
     in_right = q_right.tryGet()
     in_disparity = q_disparity.tryGet()
+    in_depth = q_depth.tryGet()
 
     timestamp = rospy.get_rostime()
 
-    if in_rgb is None and in_nn is None and in_left is None  and in_right is None and in_disparity is None:
+    if in_rgb is None and in_nn is None and in_left is None  and in_right is None and in_disparity is None and in_depth is None:
         time.sleep(0.01)
         continue
 
@@ -272,10 +282,32 @@ while not rospy.is_shutdown():
             frame_disparity = np.ascontiguousarray(frame_disparity)
             msg = CompressedImage()
             msg.header.stamp = timestamp
+            msg.frame_id = "camera"
             msg.format = "jpeg"
             msg.data = np.array(cv2.imencode('.jpg', frame_disparity)[1]).tobytes()
             # Publish new image
             disparity_pub.publish(msg)
+
+    if in_depth is not None and (depth_pub.get_num_connections() or depth_compressed_pub.get_num_connections()):
+        depth_camera_info_msg.header.frame_id = "stereo_right"
+        depth_camera_info_msg.header.stamp = timestamp
+        depth_info_pub.publish(depth_camera_info_msg)
+        # Outputs ImgFrame message that carries RAW16 encoded (0..65535) depth data in millimeters.
+        # Non-determined / invalid depth values are set to 0
+        int_depth_frame = in_depth.getFrame()
+        depth_frame = np.float32(int_depth_frame) / 1000.
+        # Available color maps: https://docs.opencv.org/3.4/d3/d50/group__imgproc__colormap.html
+        if depth_pub.get_num_connections():
+            msg = bridge.cv2_to_imgmsg(depth_frame, "passthrough")
+            msg.header.frame_id = 'stereo_right'
+            msg.header.stamp = timestamp
+            depth_pub.publish(msg)
+        
+        if depth_compressed_pub.get_num_connections():
+            msg = bridge.cv2_to_compressed_imgmsg(int_depth_frame.astype("uint16"), "png");
+            msg.header.stamp = timestamp
+            msg.header.frame_id = "stereo_right"
+            depth_compressed_pub.publish(msg)
 
 
     if in_left is not None and (left_pub.get_num_connections() or left_raw_pub.get_num_connections()):
