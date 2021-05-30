@@ -79,7 +79,7 @@ depth_info_pub = rospy.Publisher("/cameras/depth/camera_info", CameraInfo, queue
 # Pipeline tells DepthAI what operations to perform when running - you define all of the resources used and flows here
 pipeline = depthai.Pipeline()
 
-fps = 3
+fps = 4
 
 # First, we want the Color camera as the output
 cam_rgb = pipeline.createColorCamera()
@@ -115,6 +115,7 @@ cam_disparity.setConfidenceThreshold(0)
 # Options: MEDIAN_OFF, KERNEL_3x3, KERNEL_5x5, KERNEL_7x7 (default)
 median = depthai.StereoDepthProperties.MedianFilter.KERNEL_7x7 # For depth filtering
 cam_disparity.setMedianFilter(median)
+cam_disparity.setDepthAlign(depthai.StereoDepthProperties.DepthAlign.CENTER)
 cam_disparity.setLeftRightCheck(lr_check)
 max_disparity = 95
 
@@ -289,7 +290,7 @@ while not rospy.is_shutdown():
             disparity_pub.publish(msg)
 
     if in_depth is not None and (depth_pub.get_num_connections() or depth_compressed_pub.get_num_connections()):
-        depth_camera_info_msg.header.frame_id = "stereo_right"
+        depth_camera_info_msg.header.frame_id = "camera"
         depth_camera_info_msg.header.stamp = timestamp
         depth_info_pub.publish(depth_camera_info_msg)
         # Outputs ImgFrame message that carries RAW16 encoded (0..65535) depth data in millimeters.
@@ -298,15 +299,15 @@ while not rospy.is_shutdown():
         depth_frame = np.float32(int_depth_frame) / 1000.
         # Available color maps: https://docs.opencv.org/3.4/d3/d50/group__imgproc__colormap.html
         if depth_pub.get_num_connections():
-            msg = bridge.cv2_to_imgmsg(depth_frame, "passthrough")
-            msg.header.frame_id = 'stereo_right'
+            msg = bridge.cv2_to_imgmsg(int_depth_frame, "mono16")
+            msg.header.frame_id = 'camera'
             msg.header.stamp = timestamp
             depth_pub.publish(msg)
         
         if depth_compressed_pub.get_num_connections():
-            msg = bridge.cv2_to_compressed_imgmsg(int_depth_frame.astype("uint16"), "png");
+            msg = bridge.cv2_to_compressed_imgmsg(int_depth_frame, "png");
             msg.header.stamp = timestamp
-            msg.header.frame_id = "stereo_right"
+            msg.header.frame_id = "camera"
             depth_compressed_pub.publish(msg)
 
 
