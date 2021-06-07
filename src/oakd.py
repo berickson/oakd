@@ -108,14 +108,14 @@ extended_disparity = False
 # Better accuracy for longer distance, fractional disparity 32-levels:
 subpixel = False
 # Better handling for occlusions:
-lr_check = False
+lr_check = True # remove occlusions from left or right
 cam_disparity = pipeline.createStereoDepth()
-cam_disparity.setConfidenceThreshold(0)
+cam_disparity.setConfidenceThreshold(50) # 0-255, lower numbers are more restrictive
 #cam_disparity.setOutputDepth(False)
 # Options: MEDIAN_OFF, KERNEL_3x3, KERNEL_5x5, KERNEL_7x7 (default)
 median = depthai.StereoDepthProperties.MedianFilter.KERNEL_7x7 # For depth filtering
 cam_disparity.setMedianFilter(median)
-cam_disparity.setDepthAlign(depthai.StereoDepthProperties.DepthAlign.CENTER)
+cam_disparity.setDepthAlign(depthai.StereoDepthProperties.DepthAlign.RECTIFIED_RIGHT)
 cam_disparity.setLeftRightCheck(lr_check)
 max_disparity = 95
 
@@ -275,7 +275,7 @@ while not rospy.is_shutdown():
         frame_disparity = cv2.applyColorMap(frame_disparity, cv2.COLORMAP_JET)
         if disparity_raw_pub.get_num_connections():
             msg = bridge.cv2_to_imgmsg(frame_disparity, "bgr8")
-            msg.header.frame_id = 'camera'
+            msg.header.frame_id = 'stereo_right'
             msg.header.stamp = timestamp
             disparity_raw_pub.publish(msg)
 
@@ -283,14 +283,14 @@ while not rospy.is_shutdown():
             frame_disparity = np.ascontiguousarray(frame_disparity)
             msg = CompressedImage()
             msg.header.stamp = timestamp
-            msg.frame_id = "camera"
+            msg.header.frame_id = "stereo_right"
             msg.format = "jpeg"
             msg.data = np.array(cv2.imencode('.jpg', frame_disparity)[1]).tobytes()
             # Publish new image
             disparity_pub.publish(msg)
 
     if in_depth is not None and (depth_pub.get_num_connections() or depth_compressed_pub.get_num_connections()):
-        depth_camera_info_msg.header.frame_id = "camera"
+        depth_camera_info_msg.header.frame_id = "stereo_right"
         depth_camera_info_msg.header.stamp = timestamp
         depth_info_pub.publish(depth_camera_info_msg)
         # Outputs ImgFrame message that carries RAW16 encoded (0..65535) depth data in millimeters.
@@ -299,8 +299,9 @@ while not rospy.is_shutdown():
         depth_frame = np.float32(int_depth_frame) / 1000.
         # Available color maps: https://docs.opencv.org/3.4/d3/d50/group__imgproc__colormap.html
         if depth_pub.get_num_connections():
-            msg = bridge.cv2_to_imgmsg(int_depth_frame, "mono16")
-            msg.header.frame_id = 'camera'
+            #msg = bridge.cv2_to_imgmsg(int_depth_frame, "mono16")
+            msg = bridge.cv2_to_imgmsg(int_depth_frame, "passthrough")
+            msg.header.frame_id = 'stereo_right'
             msg.header.stamp = timestamp
             depth_pub.publish(msg)
         
