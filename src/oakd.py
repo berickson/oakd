@@ -110,7 +110,7 @@ subpixel = False
 # Better handling for occlusions:
 lr_check = True # remove occlusions from left or right
 cam_disparity = pipeline.createStereoDepth()
-cam_disparity.setConfidenceThreshold(50) # 0-255, lower numbers are more restrictive
+cam_disparity.setConfidenceThreshold(20) # 0-255, lower numbers are more restrictive
 #cam_disparity.setOutputDepth(False)
 # Options: MEDIAN_OFF, KERNEL_3x3, KERNEL_5x5, KERNEL_7x7 (default)
 median = depthai.StereoDepthProperties.MedianFilter.KERNEL_7x7 # For depth filtering
